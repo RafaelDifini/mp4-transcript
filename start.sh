@@ -54,7 +54,26 @@ trap cleanup INT TERM
 "$PYTHON" whisper_server.py --model "$WHISPER_MODEL" --port "$WHISPER_PORT" &
 WHISPER_PID=$!
 
-sleep 3
+# Aguarda o servidor Whisper ficar pronto (até 120s — primeira execução baixa o modelo)
+echo " Aguardando servidor Whisper ficar pronto..."
+WHISPER_READY=0
+for i in $(seq 1 120); do
+    if curl -sf "http://127.0.0.1:${WHISPER_PORT}/health" > /dev/null 2>&1; then
+        WHISPER_READY=1
+        break
+    fi
+    sleep 1
+done
+
+if [ "$WHISPER_READY" -eq 0 ]; then
+    echo ""
+    echo "[ERRO] Servidor Whisper nao respondeu em 120s. Verifique o log acima."
+    kill "$WHISPER_PID" 2>/dev/null || true
+    exit 1
+fi
+
+echo " Servidor Whisper pronto. Iniciando Next.js..."
+echo ""
 
 # Inicia o Next.js em background
 npm run dev &
