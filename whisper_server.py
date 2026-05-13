@@ -54,7 +54,7 @@ _lock = asyncio.Lock()  # garante que apenas uma transcrição rode por vez na C
 
 def load_model(name: str) -> WhisperModel:
     print(f"[whisper_server] Carregando modelo '{name}'...", flush=True)
-    m = WhisperModel(name, device="cpu", compute_type="int8")
+    m = WhisperModel(name, device="cpu", compute_type="float32")
     print(f"[whisper_server] Modelo '{name}' carregado.", flush=True)
     return m
 
