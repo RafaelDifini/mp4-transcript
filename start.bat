@@ -1,41 +1,82 @@
 @echo off
 :: ============================================================
-:: start.bat — Sobe FastAPI (Whisper) + Next.js juntos
-:: ============================================================
-:: Pré-requisitos:
-::   - .venv criado com: python -m venv .venv
-::   - dependências instaladas: .venv\Scripts\pip install -r requirements.txt
-::   - Node modules instalados: npm install
+:: start.bat - Sobe FastAPI (Whisper) + Next.js juntos
+:: e abre o navegador quando o portal local estiver pronto
 :: ============================================================
 
-setlocal
+setlocal EnableDelayedExpansion
 
-:: Detecta o Python do venv (ou usa o do sistema se não tiver venv)
-if exist ".venv\Scripts\python.exe" (
-    set PYTHON=.venv\Scripts\python.exe
-) else (
-    set PYTHON=python
-    echo [AVISO] .venv nao encontrado. Usando Python do sistema.
+if exist ".env.local" (
+  for /f "usebackq tokens=1,* delims==" %%A in (`findstr /r "^[A-Z_][A-Z_]*=.*" ".env.local"`) do (
+    set "%%A=%%B"
+  )
 )
 
-:: Modelo e porta (pode ser sobrescrito por .env.local)
-if "%WHISPER_MODEL%"=="" set WHISPER_MODEL=base
-if "%WHISPER_PORT%"=="" set WHISPER_PORT=8000
+if not "%PYTHON_EXECUTABLE%"=="" if exist "%PYTHON_EXECUTABLE%" (
+  set "PYTHON=%PYTHON_EXECUTABLE%"
+) else if exist ".venv\Scripts\python.exe" (
+  set "PYTHON=.venv\Scripts\python.exe"
+) else (
+  set "PYTHON=python"
+  echo [AVISO] .venv nao encontrado e PYTHON_EXECUTABLE nao configurado.
+  echo         Usando Python do sistema.
+)
+
+if "%WHISPER_MODEL%"=="" set "WHISPER_MODEL=base"
+if "%WHISPER_PORT%"=="" set "WHISPER_PORT=8000"
 
 echo.
-echo  Iniciando Whisper Server (modelo: %WHISPER_MODEL%, porta: %WHISPER_PORT%)...
-echo  Iniciando Next.js em http://localhost:3000
+echo  Python:  %PYTHON%
+echo  Modelo:  %WHISPER_MODEL%
+echo  Porta:   %WHISPER_PORT%
+echo  Next.js: http://127.0.0.1:3000
 echo.
-echo  Para encerrar: feche esta janela ou pressione Ctrl+C duas vezes.
+echo  Para encerrar: feche esta janela ou pressione Ctrl+C.
 echo.
 
-:: Abre o servidor Whisper em uma janela separada
 start "Whisper Server" cmd /k "%PYTHON% whisper_server.py --model %WHISPER_MODEL% --port %WHISPER_PORT%"
 
-:: Aguarda 3 segundos para o servidor começar a carregar o modelo
-timeout /t 3 /nobreak > nul
+echo  Aguardando servidor Whisper ficar pronto...
+set "WHISPER_READY=0"
+for /L %%I in (1,1,120) do (
+  curl -sf "http://127.0.0.1:%WHISPER_PORT%/health" >nul 2>nul
+  if !errorlevel! equ 0 (
+    set "WHISPER_READY=1"
+    goto :whisper_ready
+  )
+  timeout /t 1 /nobreak >nul
+)
 
-:: Sobe o Next.js no terminal atual
-call npm run dev
+:whisper_ready
+if "%WHISPER_READY%"=="0" (
+  echo.
+  echo [ERRO] Servidor Whisper nao respondeu em 120s.
+  exit /b 1
+)
 
+echo  Servidor Whisper pronto. Iniciando Next.js...
+echo.
+
+start "Next.js App" cmd /k "npm run dev"
+
+echo  Aguardando portal local ficar pronto...
+set "NEXT_READY=0"
+for /L %%I in (1,1,120) do (
+  curl -sf "http://127.0.0.1:3000" >nul 2>nul
+  if !errorlevel! equ 0 (
+    set "NEXT_READY=1"
+    goto :next_ready
+  )
+  timeout /t 1 /nobreak >nul
+)
+
+:next_ready
+if "%NEXT_READY%"=="1" (
+  echo  Portal pronto. Abrindo navegador...
+  start "" "http://127.0.0.1:3000"
+) else (
+  echo [AVISO] Next.js nao respondeu em 120s. Abra manualmente: http://127.0.0.1:3000
+)
+
+echo.
 endlocal
