@@ -9,12 +9,6 @@ const execAsync = promisify(exec);
 
 export const maxDuration = 300;
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 const WHISPER_SERVER_URL =
   process.env.WHISPER_SERVER_URL ?? "http://127.0.0.1:8000";
 
