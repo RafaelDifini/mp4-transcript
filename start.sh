@@ -50,6 +50,29 @@ cleanup() {
 }
 trap cleanup INT TERM
 
+open_browser() {
+    local url="$1"
+
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$url" >/dev/null 2>&1 &
+        return
+    fi
+
+    if command -v open >/dev/null 2>&1; then
+        open "$url" >/dev/null 2>&1 &
+        return
+    fi
+
+    if command -v cmd.exe >/dev/null 2>&1; then
+        cmd.exe /c start "" "$url" >/dev/null 2>&1
+        return
+    fi
+
+    if command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -Command "Start-Process '$url'" >/dev/null 2>&1
+    fi
+}
+
 # Inicia o servidor Whisper em background
 "$PYTHON" whisper_server.py --model "$WHISPER_MODEL" --port "$WHISPER_PORT" &
 WHISPER_PID=$!
@@ -78,5 +101,24 @@ echo ""
 # Inicia o Next.js em background
 npm run dev &
 NEXT_PID=$!
+
+echo " Aguardando portal local ficar pronto..."
+NEXT_READY=0
+for i in $(seq 1 120); do
+    if curl -sf "http://127.0.0.1:3000" > /dev/null 2>&1; then
+        NEXT_READY=1
+        break
+    fi
+    sleep 1
+done
+
+if [ "$NEXT_READY" -eq 1 ]; then
+    echo " Portal pronto. Abrindo navegador..."
+    open_browser "http://127.0.0.1:3000"
+    echo ""
+else
+    echo "[AVISO] Next.js nao respondeu em 120s. Abra manualmente: http://127.0.0.1:3000"
+    echo ""
+fi
 
 wait "$WHISPER_PID" "$NEXT_PID"
